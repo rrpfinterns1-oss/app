@@ -92,3 +92,17 @@ def test_add_note(app):
     notes = app.session_state["notes"]
     assert len(notes) == 1 and notes[0]["title"] == "Coverage"
     assert not app.exception
+
+
+def test_line_chart_option_on_portfolio_and_emissions(app):
+    app.button_group(key="portfolio_chart").set_value("Line").run()
+    assert app.session_state["emissions_chart"] == "Line"
+    assert not app.exception
+    # The per-family line chart lets any family be highlighted.
+    app.selectbox(key="portfolio_focus").set_value("Trent 7000").run()
+    app.selectbox(key="emissions_focus").set_value("LEAP 1-A").run()
+    app.button_group(key="emissions_year").set_value(2033).run()
+    assert not app.exception
+    app.button_group(key="emissions_chart").set_value("Bar").run()
+    assert app.session_state["portfolio_chart"] == "Bar"
+    assert not app.exception

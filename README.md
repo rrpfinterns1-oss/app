@@ -17,13 +17,17 @@ streamlit run streamlit_app.py
 
 | Tab | What it does | User stories |
 | --- | --- | --- |
-| Portfolio | Engine quantities 2026–2035: year selector, totals by year, mix by family, full progression table with trends | US-01, US-09 |
-| Emissions | Estimated tCO₂e by engine family for a chosen year: quantity, annual tCO₂e per engine and portfolio total | US-02, US-09 |
+| Portfolio | Engine quantities 2026–2035: year selector, totals by year, mix by family, full progression table with trends; bar or line charts | US-01, US-09 |
+| Emissions | Estimated tCO₂e by engine family for a chosen year: quantity, annual tCO₂e per engine and portfolio total; bar or line charts | US-02, US-09 |
 | Scenario Builder | Edit any quantity, choose families to offset, set the offset % and carbon project; live results, coverage bar and a factual interpretation | US-03, US-04, US-05 |
 | Compare Scenarios | Saved scenarios side by side (assumptions and outputs), charts, CSV/JSON export and JSON import | US-06 |
 | Source Data | Every workbook table, notes on the workbook, calculation method and boundaries; source values and user assumptions are labelled | US-07 |
 | Testing | Hand-calculated test cases (manual calculation, year change, quantity change, targeted selection, zero offset, full offset, commercial indicator) and workbook integrity checks, with a downloadable record | US-08 |
 | Findings | Notes written by the team, optionally linked to a scenario, exported as Markdown or CSV | US-10 |
+
+On the Portfolio and Emissions tabs a Bar / Line switch (kept in step across both
+tabs) turns the charts into line graphs: totals by year as a line, and each engine
+family over time with one chosen family highlighted.
 
 Four illustrative scenarios are preloaded so the comparison has content on first
 open: full offset, partial offset (50%), targeted offset (the three families with

@@ -10,7 +10,7 @@ from ...fmt import num, pct, signed, signed_pct
 from ...model import baseline_emissions_by_year, emissions_table
 from .. import charts
 from ..style import card_title, fit_rows, kpi, kpi_row, note, section, totals_table
-from .portfolio import year_picker
+from .portfolio import focus_picker, long_by_year, view_controls
 
 
 def render(wb: Workbook) -> None:
@@ -21,7 +21,7 @@ def render(wb: Workbook) -> None:
         "(tCO₂e per engine per flight × flights per year). Emission factors are "
         "teaching estimates from the workbook.",
     )
-    year = year_picker("emissions_year")
+    year, kind = view_controls("emissions")
 
     df = emissions_table(wb, year)
     by_year = baseline_emissions_by_year(wb)
@@ -43,16 +43,38 @@ def render(wb: Workbook) -> None:
 
     left, right = st.columns([1, 1.15], gap="medium")
     with left, st.container(key="card-emissions-family"):
-        card_title(f"Estimated tCO₂e by engine family, {year}", "Families with at least one engine")
-        charts.show(charts.ranked_bars(df, "Engine family", "Estimated tCO₂e",
-                                       value_title="Estimated tCO₂e", label_format=",.0f"))
+        if kind == "Line":
+            card_title("Estimated tCO₂e by engine family over time",
+                       "Chosen family in blue, other families in grey · gold line marks "
+                       f"{year}")
+            focus = focus_picker("emissions_focus", list(wb.families),
+                                 str(top["Engine family"]))
+            by_family = wb.quantities.mul(wb.emissions["annual"], axis=0)
+            charts.show(charts.family_lines(
+                long_by_year(by_family, "Estimated tCO₂e"), "Estimated tCO₂e", focus, year,
+                value_title="Estimated tCO₂e", label_format=",.0f",
+                axis_label_expr=charts.COMPACT,
+            ))
+        else:
+            card_title(f"Estimated tCO₂e by engine family, {year}",
+                       "Families with at least one engine")
+            charts.show(charts.ranked_bars(df, "Engine family", "Estimated tCO₂e",
+                                           value_title="Estimated tCO₂e", label_format=",.0f"))
     with right, st.container(key="card-emissions-years"):
-        card_title("Estimated portfolio emissions by year",
-                   f"Workbook forecast quantities · {year} highlighted")
-        charts.show(charts.year_columns(
-            by_year, "Estimated tCO₂e", year, value_title="Estimated tCO₂e",
-            axis_label_expr=charts.MILLIONS, label_format=",.0f", height=250,
-        ))
+        if kind == "Line":
+            card_title("Estimated portfolio emissions by year",
+                       f"Workbook forecast quantities · {year} marked")
+            charts.show(charts.year_line(
+                by_year, "Estimated tCO₂e", year, value_title="Estimated tCO₂e",
+                axis_label_expr=charts.MILLIONS, label_format=",.0f", height=250,
+            ))
+        else:
+            card_title("Estimated portfolio emissions by year",
+                       f"Workbook forecast quantities · {year} highlighted")
+            charts.show(charts.year_columns(
+                by_year, "Estimated tCO₂e", year, value_title="Estimated tCO₂e",
+                axis_label_expr=charts.MILLIONS, label_format=",.0f", height=250,
+            ))
         note("Emission factors per engine are the same in every year; changes over time "
              "come only from the forecast quantities.")
 

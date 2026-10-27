@@ -1,4 +1,4 @@
-"""Session state: shared year selection, the scenario builder and saved items.
+"""Session state: shared view controls, the scenario builder and saved items.
 
 The builder's editable table follows the anchor pattern: the frame handed to
 st.data_editor is stored in session state and only replaced (with a new
@@ -27,6 +27,11 @@ BUILDER_TAB = TABS[2]
 
 FAMILY, WORKBOOK_QTY, SCENARIO_QTY, OFFSET = "Engine family", "Workbook qty", "Scenario qty", "Offset"
 
+CHART_KINDS = ("Bar", "Line")
+
+# Controls that appear on both the Portfolio and Emissions tabs and stay in step.
+SYNCED = (("portfolio_year", "emissions_year"), ("portfolio_chart", "emissions_chart"))
+
 ss = st.session_state
 
 
@@ -37,6 +42,8 @@ def init(wb: Workbook) -> None:
     ss.nav = TABS[0]
     ss.portfolio_year = HORIZON[0]
     ss.emissions_year = HORIZON[0]
+    ss.portfolio_chart = CHART_KINDS[0]
+    ss.emissions_chart = CHART_KINDS[0]
     ss.scenarios = illustrative_scenarios(wb)
     ss.notes = []
     ss.sb_year = HORIZON[0]
@@ -50,14 +57,15 @@ def init(wb: Workbook) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Year selectors on the Portfolio and Emissions tabs stay in step.
+# Year and chart-type controls on the Portfolio and Emissions tabs stay in step.
 
 
-def sync_year(source: str) -> None:
-    year = ss[source]
-    for key in ("portfolio_year", "emissions_year"):
-        if key != source:
-            ss[key] = year
+def sync(source: str) -> None:
+    for group in SYNCED:
+        if source in group:
+            for key in group:
+                if key != source:
+                    ss[key] = ss[source]
 
 
 # ---------------------------------------------------------------------------

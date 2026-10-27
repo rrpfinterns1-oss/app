@@ -15,6 +15,8 @@ from .style import BASELINE, GOLD, HAIRLINE, INK, INK_2, MUTED, NAVY, SANS, STON
 _FONT = SANS.split(",")[0]
 # Axis labels such as 0, 0.5M, 1M for tonne scales in the millions.
 MILLIONS = "datum.value == 0 ? '0' : format(datum.value / 1e6, '.1~f') + 'M'"
+COMPACT = ("datum.value >= 1e6 ? format(datum.value / 1e6, '.2~f') + 'M' : "
+           "datum.value >= 1e3 ? format(datum.value / 1e3, ',.0f') + 'k' : format(datum.value, ',')")
 # '26 instead of 2026 when ten year labels would not fit side by side.
 SHORT_YEAR_WHEN_NARROW = "width < 460 ? \"'\" + slice(datum.label, 2) : datum.label"
 
@@ -62,6 +64,66 @@ def year_columns(df: pd.DataFrame, value: str, selected_year: int, *, value_titl
         dy=-9, fontSize=12, fontWeight=500, color=INK, font=_FONT
     ).encode(y=alt.Y(f"{value}:Q"), text=alt.Text(f"{value}:Q", format=label_format))
     return _finish(bars + label, height)
+
+
+def year_line(df: pd.DataFrame, value: str, selected_year: int, *, value_title: str,
+              label_format: str, axis_format: str = ",.0f", axis_label_expr: str | None = None,
+              height: int = 230) -> alt.TopLevelMixin:
+    """A single series over time; the selected year's point is filled and labelled."""
+    data = df.assign(Year=df["Year"].astype(str), _sel=df["Year"] == selected_year)
+    base = alt.Chart(data).encode(
+        x=alt.X("Year:O", title=None, scale=alt.Scale(padding=0.5),
+                axis=alt.Axis(labelAngle=0, ticks=False, domain=True, labelOverlap=False,
+                              labelExpr=SHORT_YEAR_WHEN_NARROW)),
+        y=alt.Y(f"{value}:Q", title=None, scale=alt.Scale(zero=False, nice=True),
+                axis=alt.Axis(format=axis_format, labelExpr=axis_label_expr or alt.Undefined,
+                              tickCount=4, domain=False, ticks=False)),
+    )
+    tooltip = [alt.Tooltip("Year:O"), alt.Tooltip(f"{value}:Q", title=value_title, format=label_format)]
+    line = base.mark_line(color=NAVY, strokeWidth=2)
+    dots = base.mark_point(filled=True, stroke=NAVY, strokeWidth=2).encode(
+        fill=alt.condition("datum._sel", alt.value(NAVY), alt.value("white")),
+        size=alt.condition("datum._sel", alt.value(110), alt.value(40)),
+    )
+    # Invisible, generous hover targets so the tooltip is easy to reach.
+    hits = base.mark_point(size=600, opacity=0).encode(tooltip=tooltip)
+    label = base.transform_filter("datum._sel").mark_text(
+        dy=-15, fontSize=12, fontWeight=500, color=INK, font=_FONT
+    ).encode(text=alt.Text(f"{value}:Q", format=label_format))
+    return _finish(line + dots + label + hits, height)
+
+
+def family_lines(df: pd.DataFrame, value: str, focus: str, selected_year: int, *,
+                 value_title: str, label_format: str, axis_format: str = ",.0f",
+                 axis_label_expr: str | None = None, height: int = 290) -> alt.TopLevelMixin:
+    """Every engine family over time in grey with one highlighted in navy.
+
+    Expects long data with columns Engine family, Year and the value column.
+    """
+    data = df.assign(Year=df["Year"].astype(str))
+    x = alt.X("Year:O", title=None, scale=alt.Scale(padding=0.5),
+              axis=alt.Axis(labelAngle=0, ticks=False, domain=True, labelOverlap=False,
+                            labelExpr=SHORT_YEAR_WHEN_NARROW))
+    y = alt.Y(f"{value}:Q", title=None,
+              axis=alt.Axis(format=axis_format, labelExpr=axis_label_expr or alt.Undefined,
+                            tickCount=4, domain=False, ticks=False))
+    is_focus = data["Engine family"] == focus
+    others = alt.Chart(data[~is_focus]).mark_line(color=STONE, strokeWidth=1.5).encode(
+        x=x, y=y, detail="Engine family:N")
+    focus_data = data[is_focus]
+    focus_line = alt.Chart(focus_data).mark_line(color=NAVY, strokeWidth=2.5).encode(x=x, y=y)
+    focus_dots = alt.Chart(focus_data).mark_point(filled=True, color=NAVY, size=36).encode(x=x, y=y)
+    label = alt.Chart(focus_data[focus_data["Year"] == str(selected_year)]).mark_text(
+        dy=-14, fontSize=12, fontWeight=500, color=INK, font=_FONT
+    ).encode(x=x, y=y, text=alt.Text(f"{value}:Q", format=label_format))
+    marker = alt.Chart(pd.DataFrame({"Year": [str(selected_year)]})).mark_rule(
+        color=GOLD, strokeWidth=1, opacity=0.8).encode(x=x)
+    hits = alt.Chart(data).mark_point(size=300, opacity=0).encode(
+        x=x, y=y,
+        tooltip=[alt.Tooltip("Engine family:N"), alt.Tooltip("Year:O"),
+                 alt.Tooltip(f"{value}:Q", title=value_title, format=label_format)],
+    )
+    return _finish(marker + others + focus_line + focus_dots + label + hits, height)
 
 
 def ranked_bars(df: pd.DataFrame, category: str, value: str, *, value_title: str,
