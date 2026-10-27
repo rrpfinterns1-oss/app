@@ -1,0 +1,23 @@
+[theme]
+base = "light"
+primaryColor = "#1F2E4D"
+backgroundColor = "#F6F4EF"
+secondaryBackgroundColor = "#F1EEE7"
+textColor = "#16191F"
+linkColor = "#34538F"
+borderColor = "#E3DED3"
+showWidgetBorder = true
+baseRadius = "0.6rem"
+buttonRadius = "full"
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap"
+headingFont = "Cormorant Garamond:https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600&display=swap"
+headingFontWeights = 500
+baseFontSize = 15
+dataframeHeaderBackgroundColor = "#F3F0EA"
+chartCategoricalColors = ["#34538F", "#B38236"]
+
+[client]
+toolbarMode = "minimal"
+
+[browser]
+gatherUsageStats = false
