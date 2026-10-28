@@ -19,7 +19,7 @@ streamlit run streamlit_app.py
 | --- | --- | --- |
 | Portfolio | Engine quantities 2026–2035: year selector, totals by year, mix by family, full progression table with trends; bar or line charts | US-01, US-09 |
 | Emissions | Estimated tCO₂e by engine family for a chosen year: quantity, annual tCO₂e per engine and portfolio total; bar or line charts | US-02, US-09 |
-| Scenario Builder | Edit any quantity, choose families to offset, set the offset % and carbon project; live results, coverage bar and a factual interpretation | US-03, US-04, US-05 |
+| Scenario Builder | Pick a saved scenario to change it (or start a new one); edit any quantity, choose families to offset, set the offset % and carbon project; live results, coverage bar and a factual interpretation; save changes, save as new or delete | US-03, US-04, US-05 |
 | Compare Scenarios | Saved scenarios side by side (assumptions and outputs), charts, CSV/JSON export and JSON import | US-06 |
 | Charts | Pick any data (engine quantities or emissions by year, emissions per engine, profit per engine, project prices, saved scenarios) and show it as a bar chart or line graph; choose families and years | US-09 |
 | Source Data | Every workbook table, notes on the workbook, calculation method and boundaries; source values and user assumptions are labelled | US-07 |

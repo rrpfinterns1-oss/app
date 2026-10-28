@@ -47,8 +47,9 @@ def test_build_save_and_reload_a_scenario(app):
     s = saved["Forty percent"]
     assert s.offset_pct == 40 and s.project == "Bondhu Chula Stoves" and s.year == 2026
     assert len(s.selected) == 13  # every family is selected by default
-    # The name field moves on to a fresh default after saving.
-    assert app.session_state["sb_name"] != "Forty percent"
+    # After saving, the builder carries on changing that scenario.
+    assert app.session_state["sb_editing"] == "Forty percent"
+    assert app.session_state["sb_pick"] == "Forty percent"
 
     # Change the builder, then load the saved scenario back into it.
     by_label(app.slider, "Share of selected emissions to offset").set_value(0).run()
@@ -121,4 +122,70 @@ def test_charts_tab_draws_every_dataset_as_bar_and_line(app):
     app.multiselect(key="ex_show_Engine quantities by year").set_value(
         ["Portfolio total", "Trent 7000"]).run()
     app.select_slider(key="ex_years").set_value((2028, 2033)).run()
+    assert not app.exception
+
+
+EXAMPLE_B = "B · Partial offset (2026)"
+EXAMPLE_C = "C · Targeted offset (2026)"
+
+
+def names(app):
+    return [s.name for s in app.session_state["scenarios"]]
+
+
+def test_change_a_saved_scenario_from_the_picker(app):
+    assert app.session_state["sb_pick"] == "__new__"
+    app.selectbox(key="sb_pick").set_value(EXAMPLE_B).run()
+    assert app.session_state["sb_offset"] == 50
+    assert app.session_state["sb_editing"] == EXAMPLE_B
+
+    by_label(app.slider, "Share of selected emissions to offset").set_value(75).run()
+    app.button(key="sb_save_changes").click().run()
+    b = app.session_state["scenarios"][names(app).index(EXAMPLE_B)]
+    assert b.offset_pct == 75 and not b.illustrative
+    assert len(names(app)) == 4
+
+    # "Save as new" needs a name that is not taken.
+    app.button(key="sb_save_new").click().run()
+    assert len(names(app)) == 4 and app.error
+    app.text_input(key="sb_name").input("B at 75%").run()
+    app.button(key="sb_save_new").click().run()
+    assert names(app)[-1] == "B at 75%" and app.session_state["sb_editing"] == "B at 75%"
+
+    # Deleting the scenario being changed keeps its values as a new, unsaved one.
+    app.button(key="sb_delete").click().run()
+    assert "B at 75%" not in names(app)
+    assert app.session_state["sb_editing"] is None
+    assert app.session_state["sb_offset"] == 75
+    assert not app.exception
+
+
+def test_new_scenario_starts_from_the_workbook_forecast(app):
+    app.selectbox(key="sb_pick").set_value(EXAMPLE_C).run()
+    app.selectbox(key="sb_pick").set_value("__new__").run()
+    anchor = app.session_state["sb_anchor"]
+    assert (anchor["Scenario qty"] == anchor["Workbook qty"]).all() and anchor["Offset"].all()
+    assert app.session_state["sb_offset"] == 0 and app.session_state["sb_project"] is None
+    assert app.session_state["sb_editing"] is None
+
+
+def test_renaming_keeps_label_and_linked_notes(app):
+    by_label(app.selectbox, "Related scenario (optional)").set_value(EXAMPLE_C)
+    by_label(app.text_area, "Observation").input("Covers 70.5% of emissions.")
+    app.button(key="FormSubmitter:note_form-Add note").click().run()
+
+    app.selectbox(key="sb_pick").set_value(EXAMPLE_C).run()
+    app.text_input(key="sb_name").input("Targeted: top three").run()
+    app.button(key="sb_save_changes").click().run()
+    renamed = app.session_state["scenarios"][names(app).index("Targeted: top three")]
+    assert renamed.illustrative  # only the name changed
+    assert EXAMPLE_C not in names(app)
+    assert app.session_state["notes"][0]["scenario"] == "Targeted: top three"
+
+
+def test_compare_tab_opens_a_scenario_for_changing(app):
+    app.selectbox(key="cmp_edit").set_value(EXAMPLE_C).run()
+    app.button(key="cmp_open").click().run()
+    assert app.session_state["sb_editing"] == EXAMPLE_C
+    assert app.session_state["nav"] == "Scenario Builder"
     assert not app.exception

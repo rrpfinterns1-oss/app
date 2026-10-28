@@ -7,6 +7,8 @@ widget key) when a helper button, a year change or a scenario load rewrites it.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pandas as pd
 import streamlit as st
 
@@ -29,6 +31,7 @@ BUILDER_TAB = TABS[2]
 FAMILY, WORKBOOK_QTY, SCENARIO_QTY, OFFSET = "Engine family", "Workbook qty", "Scenario qty", "Offset"
 
 CHART_KINDS = ("Bar", "Line")
+NEW_SCENARIO = "__new__"  # scenario picker value for an unsaved scenario
 
 # Controls that appear on both the Portfolio and Emissions tabs and stay in step.
 SYNCED = (("portfolio_year", "emissions_year"), ("portfolio_chart", "emissions_chart"))
@@ -55,6 +58,9 @@ def init(wb: Workbook) -> None:
     # no assumption has been applied until the user makes one.
     ss.sb_anchor = _anchor(wb, HORIZON[0], wb.quantities_for(HORIZON[0]), set(wb.families))
     ss.sb_name = next_name()
+    # The saved scenario being changed in the builder (None: a new one).
+    ss.sb_editing = None
+    ss.sb_pick = NEW_SCENARIO
 
 
 # ---------------------------------------------------------------------------
@@ -164,35 +170,116 @@ def next_name() -> str:
     return f"Scenario {n}"
 
 
-def save_current(wb: Workbook) -> None:
+def _names() -> list[str]:
+    return [x.name for x in ss.scenarios]
+
+
+def _editing(name: str | None) -> None:
+    """Mark which saved scenario the builder is changing (None: a new one)."""
+    ss.sb_editing = name
+    ss.sb_pick = name if name is not None else NEW_SCENARIO
+
+
+def _same_assumptions(a: Scenario, b: Scenario) -> bool:
+    return (a.year, dict(a.quantities), a.selected, a.offset_pct, a.project) == (
+        b.year, dict(b.quantities), b.selected, b.offset_pct, b.project)
+
+
+def has_unsaved_changes() -> bool:
+    if ss.sb_editing not in _names():
+        return True
+    saved = ss.scenarios[_names().index(ss.sb_editing)]
+    current = current_scenario()
+    return current.name != saved.name or not _same_assumptions(current, saved)
+
+
+def _validated(wb: Workbook) -> Scenario | None:
     try:
         scenario = current_scenario()
-        evaluate(wb, scenario)  # validates
+        evaluate(wb, scenario)
     except ScenarioError as exc:
         ss._flash = ("error", str(exc))
+        return None
+    return scenario
+
+
+def save_as_new(wb: Workbook) -> None:
+    scenario = _validated(wb)
+    if scenario is None:
         return
-    names = [s.name for s in ss.scenarios]
-    if scenario.name in names:
-        ss.scenarios[names.index(scenario.name)] = scenario
-        ss._flash = ("success", f"Updated “{scenario.name}”. It is in Compare Scenarios.")
-    else:
-        ss.scenarios.append(scenario)
-        ss._flash = ("success", f"Saved “{scenario.name}”. It is in Compare Scenarios.")
+    if scenario.name in _names():
+        ss._flash = ("error", f"“{scenario.name}” is already used. Type a different name, or "
+                              "pick that scenario at the top to change it.")
+        return
+    ss.scenarios.append(scenario)
+    _editing(scenario.name)
+    ss._flash = ("success", f"Saved “{scenario.name}”. It is in Compare Scenarios.")
+
+
+def save_changes(wb: Workbook) -> None:
+    old_name = ss.sb_editing
+    if old_name not in _names():
+        save_as_new(wb)
+        return
+    scenario = _validated(wb)
+    if scenario is None:
+        return
+    if scenario.name != old_name and scenario.name in _names():
+        ss._flash = ("error", f"“{scenario.name}” is already used by another scenario. "
+                              "Type a different name.")
+        return
+    index = _names().index(old_name)
+    saved = ss.scenarios[index]
+    if _same_assumptions(scenario, saved):
+        # Only the name changed: keep the description and example label.
+        scenario = replace(saved, name=scenario.name)
+    ss.scenarios[index] = scenario
+    if scenario.name != old_name:
+        for n in ss.notes:
+            if n.get("scenario") == old_name:
+                n["scenario"] = scenario.name
+    _editing(scenario.name)
+    ss._flash = ("success", f"Saved changes to “{scenario.name}”.")
+
+
+def start_new(wb: Workbook) -> None:
+    """Begin a new scenario from the workbook forecast for the current year."""
+    year = int(ss.sb_year)
+    ss.sb_offset = 0
+    ss.sb_project = None
     ss.sb_name = next_name()
+    _replace_anchor(_anchor(wb, year, wb.quantities_for(year), set(wb.families)))
+    _editing(None)
 
 
-def load_into_builder(wb: Workbook, index: int) -> None:
-    s = ss.scenarios[index]
+def on_pick(wb: Workbook) -> None:
+    if ss.sb_pick == NEW_SCENARIO:
+        start_new(wb)
+    elif ss.sb_pick in _names():
+        load_into_builder(wb, ss.sb_pick, switch_tab=False)
+
+
+def load_into_builder(wb: Workbook, name: str, switch_tab: bool = True) -> None:
+    s = ss.scenarios[_names().index(name)]
     ss.sb_year = s.year
     ss.sb_offset = int(round(s.offset_pct))
     ss.sb_project = s.project
     ss.sb_name = s.name
     _replace_anchor(_anchor(wb, s.year, s.quantities, s.selected))
-    ss.nav = BUILDER_TAB
+    _editing(s.name)
+    if switch_tab:
+        ss.nav = BUILDER_TAB
 
 
-def delete_scenario(index: int) -> None:
-    del ss.scenarios[index]
+def delete_scenario(name: str) -> None:
+    if name in _names():
+        del ss.scenarios[_names().index(name)]
+    if ss.sb_editing == name:
+        # Keep what is in the builder, now as an unsaved scenario.
+        _editing(None)
+        ss.sb_name = next_name()
+        ss._flash = ("success", f"Deleted “{name}”. The builder still shows its values as "
+                                "a new, unsaved scenario.")
 
 
 def restore_examples(wb: Workbook) -> None:
@@ -202,6 +289,7 @@ def restore_examples(wb: Workbook) -> None:
 
 def clear_scenarios() -> None:
     ss.scenarios = []
+    _editing(None)
 
 
 def pop_flash():

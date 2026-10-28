@@ -101,6 +101,14 @@ def render(wb: Workbook) -> None:
         st.success(flash)
     names = [s.name for s in ss.scenarios]
     shown = st.pills("Scenarios shown", names, selection_mode="multi", default=names)
+    edit_col, open_col = st.columns([2, 1], vertical_alignment="bottom")
+    with edit_col:
+        to_edit = st.selectbox("Change a scenario", names, key="cmp_edit",
+                               help="Opens it in the Scenario Builder, where you can change "
+                                    "any assumption and save.")
+    with open_col:
+        st.button("Open in Scenario Builder", key="cmp_open", icon=":material/edit:",
+                  on_click=state.load_into_builder, args=(wb, to_edit))
     picked = [i for i, s in enumerate(ss.scenarios) if s.name in (shown or [])]
     if not picked:
         st.info("Select at least one scenario to compare.")
@@ -144,9 +152,11 @@ def render(wb: Workbook) -> None:
             prose(interpret(r))
             with st.container(horizontal=True, gap="small"):
                 st.button("Open in Scenario Builder", key=f"open_{idx}_{r.scenario.name}",
-                          icon=":material/edit:", on_click=state.load_into_builder, args=(wb, idx))
+                          icon=":material/edit:", on_click=state.load_into_builder,
+                          args=(wb, r.scenario.name))
                 st.button("Delete", key=f"del_{idx}_{r.scenario.name}", icon=":material/delete:",
-                          type="tertiary", on_click=state.delete_scenario, args=(idx,))
+                          type="tertiary", on_click=state.delete_scenario,
+                          args=(r.scenario.name,))
 
     _manage_files(wb, results)
 

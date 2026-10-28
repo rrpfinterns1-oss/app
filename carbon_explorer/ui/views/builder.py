@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from html import escape
+
 import pandas as pd
 import streamlit as st
 
@@ -27,11 +29,38 @@ def render(wb: Workbook) -> None:
     ss = st.session_state
     section(
         "Scenario Builder",
-        "Build a scenario",
-        "Change any quantity, choose which engine families to offset, then set the "
-        "offset percentage and carbon project. Results recalculate as you go. Workbook "
-        "values are source data; anything you change is a scenario assumption.",
+        "Build or change a scenario",
+        "Pick a saved scenario to change it, or start a new one. Change any quantity, "
+        "choose which engine families to offset, then set the offset percentage and carbon "
+        "project. Results recalculate as you go. Workbook values are source data; anything "
+        "you change is a scenario assumption.",
     )
+
+    names = [x.name for x in ss.scenarios]
+    if ss.sb_pick != state.NEW_SCENARIO and ss.sb_pick not in names:
+        ss.sb_pick, ss.sb_editing = state.NEW_SCENARIO, None
+    with st.container(key="card-sb-pick"):
+        pick_col, status_col = st.columns([1.1, 1], vertical_alignment="bottom")
+        with pick_col:
+            st.selectbox(
+                "Scenario", [state.NEW_SCENARIO] + names, key="sb_pick",
+                format_func=lambda n: "＋ New scenario" if n == state.NEW_SCENARIO else n,
+                on_change=state.on_pick, args=(wb,),
+                help="Pick a saved scenario (including examples A–D) to change it, or "
+                     "start a new one from the workbook forecast.",
+            )
+        with status_col:
+            if ss.sb_editing is None:
+                status, detail = "New scenario", "not saved yet"
+            elif state.has_unsaved_changes():
+                status, detail = f"Changing “{ss.sb_editing}”", "unsaved changes"
+            else:
+                status, detail = f"Changing “{ss.sb_editing}”", "all changes saved"
+            st.html(
+                '<div class="cx-legend" style="padding-bottom:.55rem">'
+                f'<span><i class="cx-sw" style="background:{GOLD if detail != "all changes saved" else NAVY}">'
+                f"</i><b>{escape(status)}</b> · {escape(detail)}</span></div>"
+            )
 
     left, right = st.columns([1.08, 1], gap="large")
 
@@ -179,13 +208,27 @@ def render(wb: Workbook) -> None:
         ])
 
         with st.container(key="card-sb-save"):
-            card_title("Save for comparison",
-                       "Saved scenarios appear side by side in Compare Scenarios. Saving "
-                       "with an existing name updates that scenario.")
-            with st.container(horizontal=True, vertical_alignment="bottom", gap="small"):
-                st.text_input("Scenario name", key="sb_name", max_chars=60)
-                st.button("Save scenario", icon=":material/bookmark_add:", type="primary",
-                          on_click=state.save_current, args=(wb,))
+            editing = ss.sb_editing
+            if editing:
+                card_title("Save", f"“Save changes” updates “{editing}” everywhere in the app. "
+                                   "“Save as new” keeps it and adds a copy under a new name.")
+            else:
+                card_title("Save for comparison",
+                           "Saved scenarios appear side by side in Compare Scenarios.")
+            st.text_input("Scenario name", key="sb_name", max_chars=60)
+            with st.container(horizontal=True, gap="small"):
+                if editing:
+                    st.button("Save changes", key="sb_save_changes", icon=":material/save:",
+                              type="primary",
+                              on_click=state.save_changes, args=(wb,))
+                    st.button("Save as new", key="sb_save_new", icon=":material/bookmark_add:",
+                              on_click=state.save_as_new, args=(wb,))
+                    st.button("Delete", key="sb_delete", icon=":material/delete:", type="tertiary",
+                              on_click=state.delete_scenario, args=(editing,))
+                else:
+                    st.button("Save scenario", key="sb_save", icon=":material/bookmark_add:",
+                              type="primary",
+                              on_click=state.save_as_new, args=(wb,))
             flash = state.pop_flash()
             if flash:
                 (st.success if flash[0] == "success" else st.error)(flash[1])
