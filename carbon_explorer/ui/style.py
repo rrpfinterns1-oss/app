@@ -21,6 +21,9 @@ BASELINE = "#CFC9BD"
 NAVY = "#34538F"
 GOLD = "#B38236"
 STONE = "#DDD7CC"  # de-emphasis grey for context marks
+# Up to six series in one chart, in this fixed order. Passes the dataviz palette
+# validator on white (adjacent colour-blind separation >= 8, normal >= 15).
+SERIES = ("#34538F", "#B38236", "#008F83", "#C16048", "#7B63A3", "#69954F")
 DEEP = "#1F2E4D"
 
 SANS = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif"

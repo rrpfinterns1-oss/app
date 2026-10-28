@@ -147,6 +147,71 @@ def ranked_bars(df: pd.DataFrame, category: str, value: str, *, value_title: str
     return _finish(bars + labels, height)
 
 
+def multi_series(long: pd.DataFrame, kind: str, colors: dict[str, str], *, value_title: str,
+                 label_format: str, axis_label_expr: str | None = None,
+                 height: int = 340) -> alt.TopLevelMixin:
+    """Several series across the years, as lines or grouped bars.
+
+    Expects long data with columns Series, Year and Value; `colors` maps each
+    series to its colour and sets the legend order.
+    """
+    names = list(colors)
+    data = long.assign(Year=long["Year"].astype(str))
+    color = alt.Color("Series:N", scale=alt.Scale(domain=names, range=[colors[n] for n in names]),
+                      legend=alt.Legend(title=None, labelLimit=220, columns=3))
+    x = alt.X("Year:O", title=None, scale=alt.Scale(padding=0.5 if kind == "Line" else 0.1),
+              axis=alt.Axis(labelAngle=0, ticks=False, domain=True, labelOverlap=False,
+                            labelExpr=SHORT_YEAR_WHEN_NARROW))
+    y = alt.Y("Value:Q", title=None,
+              axis=alt.Axis(format=",.0f", labelExpr=axis_label_expr or alt.Undefined,
+                            tickCount=5, domain=False, ticks=False))
+    tooltip = [alt.Tooltip("Series:N", title="Showing"), alt.Tooltip("Year:O"),
+               alt.Tooltip("Value:Q", title=value_title, format=label_format)]
+    base = alt.Chart(data)
+    if kind == "Line":
+        chart = (
+            base.mark_line(strokeWidth=2).encode(x=x, y=y, color=color)
+            + base.mark_point(filled=True, size=40).encode(x=x, y=y, color=color)
+            + base.mark_point(size=400, opacity=0).encode(x=x, y=y, tooltip=tooltip)
+        )
+    else:
+        chart = base.mark_bar(stroke="white", strokeWidth=1, cornerRadiusTopLeft=3,
+                              cornerRadiusTopRight=3).encode(
+            x=x, xOffset=alt.XOffset("Series:N", sort=names), y=y, color=color, tooltip=tooltip)
+    return _finish(chart, height)
+
+
+def category_bars(df: pd.DataFrame, category: str, value: str, *, value_title: str,
+                  label_format: str, keep_order: bool = False,
+                  color: str = NAVY) -> alt.TopLevelMixin:
+    """Horizontal bars for one value per category; handles negative values."""
+    data = df.copy()
+    order = data[category].tolist() if keep_order else (
+        data.sort_values(value, ascending=False)[category].tolist())
+    lo, hi = min(0.0, float(data[value].min())), max(0.0, float(data[value].max()))
+    pad = (hi - lo) * 0.2 or 1
+    data["_neg"] = data[value] < 0
+    base = alt.Chart(data).encode(
+        y=alt.Y(f"{category}:N", sort=order, title=None,
+                axis=alt.Axis(ticks=False, domain=False, labelColor=INK_2, labelFontSize=12,
+                              labelLimit=220)),
+        x=alt.X(f"{value}:Q", title=None, axis=None,
+                scale=alt.Scale(domain=[lo - (pad if lo < 0 else 0), hi + pad])),
+        tooltip=[alt.Tooltip(f"{category}:N"),
+                 alt.Tooltip(f"{value}:Q", title=value_title, format=label_format)],
+    )
+    bars = base.mark_bar(size=16, color=color, cornerRadius=3)
+    pos = base.transform_filter("!datum._neg").mark_text(
+        align="left", dx=6, fontSize=11.5, color=INK_2, font=_FONT
+    ).encode(text=alt.Text(f"{value}:Q", format=label_format))
+    neg = base.transform_filter("datum._neg").mark_text(
+        align="right", dx=-6, fontSize=11.5, color=INK_2, font=_FONT
+    ).encode(text=alt.Text(f"{value}:Q", format=label_format))
+    zero = alt.Chart(pd.DataFrame({"z": [0]})).mark_rule(color=BASELINE).encode(
+        x=alt.X("z:Q", axis=None))
+    return _finish(zero + bars + pos + neg, max(120, 30 * len(data) + 10))
+
+
 def coverage_by_scenario(df: pd.DataFrame, height_per_row: int = 46) -> alt.TopLevelMixin:
     """Scenario emissions split into offset / not offset, with a baseline tick.
 

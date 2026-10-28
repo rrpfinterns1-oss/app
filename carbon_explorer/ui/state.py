@@ -19,6 +19,7 @@ TABS = (
     "Emissions",
     "Scenario Builder",
     "Compare Scenarios",
+    "Charts",
     "Source Data",
     "Testing",
     "Findings",

@@ -10,7 +10,8 @@ import streamlit as st
 from carbon_explorer.data import HORIZON, WORKBOOK_PATH, Workbook, load_workbook
 from carbon_explorer.ui import state
 from carbon_explorer.ui.style import footer, hero, inject_css
-from carbon_explorer.ui.views import builder, compare, emissions, findings, portfolio, source, testing
+from carbon_explorer.ui.views import (builder, compare, emissions, explore, findings, portfolio,
+                                      source, testing)
 
 st.set_page_config(
     page_title="RRPF Carbon Scenario Explorer",
@@ -46,7 +47,7 @@ hero(
 )
 
 tabs = st.tabs(state.TABS, key="nav", on_change="rerun")
-views = (portfolio, emissions, builder, compare, source, testing, findings)
+views = (portfolio, emissions, builder, compare, explore, source, testing, findings)
 for tab, view in zip(tabs, views):
     with tab:
         view.render(wb)

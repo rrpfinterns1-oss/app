@@ -106,3 +106,19 @@ def test_line_chart_option_on_portfolio_and_emissions(app):
     app.button_group(key="emissions_chart").set_value("Bar").run()
     assert app.session_state["portfolio_chart"] == "Bar"
     assert not app.exception
+
+
+def test_charts_tab_draws_every_dataset_as_bar_and_line(app):
+    from carbon_explorer.ui.views.explore import DATASETS
+
+    for ds in DATASETS:
+        app.selectbox(key="ex_data").set_value(ds.label).run()
+        for kind in ("Line", "Bar"):
+            app.button_group(key="ex_kind").set_value(kind).run()
+            assert not app.exception, (ds.label, kind)
+    # Time-series data: change the families shown and the year range.
+    app.selectbox(key="ex_data").set_value("Engine quantities by year").run()
+    app.multiselect(key="ex_show_Engine quantities by year").set_value(
+        ["Portfolio total", "Trent 7000"]).run()
+    app.select_slider(key="ex_years").set_value((2028, 2033)).run()
+    assert not app.exception
