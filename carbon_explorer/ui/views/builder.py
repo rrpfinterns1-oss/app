@@ -10,7 +10,7 @@ import streamlit as st
 from ...data import HORIZON, Workbook
 from ...fmt import input_pct, num, pct, signed, signed_pct, signed_usd, usd
 from ...model import Scenario, ScenarioError, evaluate, interpret
-from .. import state
+from .. import charts, state
 from ..state import FAMILY, OFFSET, SCENARIO_QTY, WORKBOOK_QTY
 from ..style import (GOLD, NAVY, STONE, card_title, fit_rows, kpi, kpi_row, legend, meter, prose,
                      section, tag, totals_table)
@@ -194,6 +194,21 @@ def render(wb: Workbook) -> None:
                 )
             else:
                 st.caption("Scenario emissions are 0 tCO₂e, so there is nothing to cover.")
+
+        with st.container(key="card-sb-families"):
+            card_title(f"Emissions by engine family, {r.scenario.year}",
+                       "Workbook forecast vs your scenario quantities · change a quantity "
+                       "on the left and this chart redraws")
+            paired = pd.DataFrame(
+                [row for ln in r.lines if ln.baseline_tco2e or ln.scenario_tco2e
+                 for row in ((ln.family, "Workbook forecast", ln.baseline_tco2e),
+                             (ln.family, "Your scenario", ln.scenario_tco2e))],
+                columns=["Engine family", "Series", "Value"],
+            )
+            if paired.empty:
+                st.caption("No engine family has any emissions in this scenario.")
+            else:
+                charts.show(charts.paired_bars(paired, value_title="tCO₂e", label_format=",.0f"))
 
         with st.container(key="card-sb-interpretation"):
             card_title("Scenario interpretation",

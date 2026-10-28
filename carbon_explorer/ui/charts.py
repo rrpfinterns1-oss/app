@@ -149,16 +149,18 @@ def ranked_bars(df: pd.DataFrame, category: str, value: str, *, value_title: str
 
 def multi_series(long: pd.DataFrame, kind: str, colors: dict[str, str], *, value_title: str,
                  label_format: str, axis_label_expr: str | None = None,
-                 height: int = 340) -> alt.TopLevelMixin:
+                 reference: pd.DataFrame | None = None, height: int = 340) -> alt.TopLevelMixin:
     """Several series across the years, as lines or grouped bars.
 
     Expects long data with columns Series, Year and Value; `colors` maps each
-    series to its colour and sets the legend order.
+    series to its colour and sets the legend order. `reference` (same shape)
+    is drawn as faint lines in line mode, e.g. the workbook values behind
+    user-edited numbers.
     """
     names = list(colors)
     data = long.assign(Year=long["Year"].astype(str))
     color = alt.Color("Series:N", scale=alt.Scale(domain=names, range=[colors[n] for n in names]),
-                      legend=alt.Legend(title=None, labelLimit=220, columns=3))
+                      legend=alt.Legend(title=None, labelLimit=220, columns=3, symbolOpacity=1))
     x = alt.X("Year:O", title=None, scale=alt.Scale(padding=0.5 if kind == "Line" else 0.1),
               axis=alt.Axis(labelAngle=0, ticks=False, domain=True, labelOverlap=False,
                             labelExpr=SHORT_YEAR_WHEN_NARROW))
@@ -174,6 +176,13 @@ def multi_series(long: pd.DataFrame, kind: str, colors: dict[str, str], *, value
             + base.mark_point(filled=True, size=40).encode(x=x, y=y, color=color)
             + base.mark_point(size=400, opacity=0).encode(x=x, y=y, tooltip=tooltip)
         )
+        if reference is not None:
+            ref = alt.Chart(reference.assign(Year=reference["Year"].astype(str)))
+            ref_tip = [alt.Tooltip("Series:N", title="Workbook"), alt.Tooltip("Year:O"),
+                       alt.Tooltip("Value:Q", title=value_title, format=label_format)]
+            chart = (ref.mark_line(strokeWidth=1.5, opacity=0.35).encode(x=x, y=y, color=color)
+                     + ref.mark_point(size=200, opacity=0).encode(x=x, y=y, tooltip=ref_tip)
+                     + chart)
     else:
         chart = base.mark_bar(stroke="white", strokeWidth=1, cornerRadiusTopLeft=3,
                               cornerRadiusTopRight=3).encode(
@@ -182,13 +191,23 @@ def multi_series(long: pd.DataFrame, kind: str, colors: dict[str, str], *, value
 
 
 def category_bars(df: pd.DataFrame, category: str, value: str, *, value_title: str,
-                  label_format: str, keep_order: bool = False,
-                  color: str = NAVY) -> alt.TopLevelMixin:
-    """Horizontal bars for one value per category; handles negative values."""
+                  label_format: str, keep_order: bool = False, color: str = NAVY,
+                  reference: pd.Series | None = None) -> alt.TopLevelMixin:
+    """Horizontal bars for one value per category; handles negative values.
+
+    `reference` (category -> value) adds a dark tick at that value, e.g. the
+    workbook value behind a user-edited number.
+    """
     data = df.copy()
+    if reference is not None:
+        data["_ref"] = data[category].map(reference)
+        ref_values = data["_ref"].dropna()
+    else:
+        ref_values = pd.Series(dtype=float)
     order = data[category].tolist() if keep_order else (
         data.sort_values(value, ascending=False)[category].tolist())
-    lo, hi = min(0.0, float(data[value].min())), max(0.0, float(data[value].max()))
+    every = pd.concat([data[value], ref_values])
+    lo, hi = min(0.0, float(every.min())), max(0.0, float(every.max()))
     pad = (hi - lo) * 0.2 or 1
     data["_neg"] = data[value] < 0
     base = alt.Chart(data).encode(
@@ -209,7 +228,39 @@ def category_bars(df: pd.DataFrame, category: str, value: str, *, value_title: s
     ).encode(text=alt.Text(f"{value}:Q", format=label_format))
     zero = alt.Chart(pd.DataFrame({"z": [0]})).mark_rule(color=BASELINE).encode(
         x=alt.X("z:Q", axis=None))
-    return _finish(zero + bars + pos + neg, max(120, 30 * len(data) + 10))
+    layers = zero + bars + pos + neg
+    if len(ref_values):
+        ticks = alt.Chart(data.dropna(subset=["_ref"])).mark_tick(
+            color=INK, thickness=2, size=22).encode(
+            y=alt.Y(f"{category}:N", sort=order), x=alt.X("_ref:Q"),
+            tooltip=[alt.Tooltip(f"{category}:N"),
+                     alt.Tooltip("_ref:Q", title="Workbook value", format=label_format)])
+        layers = layers + ticks
+    return _finish(layers, max(120, 30 * len(data) + 10))
+
+
+def paired_bars(df: pd.DataFrame, *, value_title: str, label_format: str) -> alt.TopLevelMixin:
+    """Workbook vs scenario value per engine family, side by side.
+
+    Expects columns Engine family, Series ("Workbook forecast" / "Your scenario")
+    and Value; families are ordered by the scenario value.
+    """
+    names = ["Workbook forecast", "Your scenario"]
+    order = (df[df["Series"] == names[1]].sort_values("Value", ascending=False)
+             ["Engine family"].tolist())
+    chart = alt.Chart(df).mark_bar(size=9, cornerRadiusTopRight=3,
+                                   cornerRadiusBottomRight=3).encode(
+        y=alt.Y("Engine family:N", sort=order, title=None,
+                axis=alt.Axis(ticks=False, domain=False, labelColor=INK_2, labelFontSize=12)),
+        yOffset=alt.YOffset("Series:N", sort=names),
+        x=alt.X("Value:Q", title=None,
+                axis=alt.Axis(labelExpr=COMPACT, tickCount=4, domain=False, ticks=False)),
+        color=alt.Color("Series:N", scale=alt.Scale(domain=names, range=[STONE, NAVY]),
+                        legend=alt.Legend(title=None)),
+        tooltip=[alt.Tooltip("Engine family:N"), alt.Tooltip("Series:N", title="Showing"),
+                 alt.Tooltip("Value:Q", title=value_title, format=label_format)],
+    )
+    return _finish(chart, max(140, 30 * df["Engine family"].nunique() + 40))
 
 
 def coverage_by_scenario(df: pd.DataFrame, height_per_row: int = 46) -> alt.TopLevelMixin:

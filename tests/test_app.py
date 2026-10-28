@@ -189,3 +189,38 @@ def test_compare_tab_opens_a_scenario_for_changing(app):
     assert app.session_state["sb_editing"] == EXAMPLE_C
     assert app.session_state["nav"] == "Scenario Builder"
     assert not app.exception
+
+
+def test_own_numbers_redraw_the_charts_without_touching_the_workbook(app):
+    import pandas as pd
+
+    app.selectbox(key="ex_data").set_value("Engine quantities by year").run()
+    app.toggle(key="ex_own").set_value(True).run()
+    assert not app.exception
+    # Type a new value into the quantities table (as the editor would store it).
+    frame = app.session_state["ex_values"]["quantities"].copy()
+    row = frame.index[frame["Engine family"] == "Trent XWB"][0]
+    frame.loc[row, "2030"] = 60
+    app.session_state["ex_values"] = {"quantities": frame}
+    app.session_state["ex_ver"] = 1  # fresh editor picks up the stored numbers
+    app.run()
+    captions = " ".join(c.value for c in app.caption)
+    assert "Trent XWB 2030: 68 → 60" in captions
+    app.button_group(key="ex_kind").set_value("Line").run()
+    assert "Faint lines show the workbook values" in " ".join(c.value for c in app.caption)
+    # Emissions use the same numbers; switching the toggle off goes back to the workbook.
+    app.selectbox(key="ex_data").set_value("Estimated emissions by year").run()
+    assert "Trent XWB 2030: 68 → 60" in " ".join(c.value for c in app.caption)
+    app.toggle(key="ex_own").set_value(False).run()
+    assert "Changed from the workbook" not in " ".join(c.value for c in app.caption)
+    # Single-value data and the reset button.
+    app.toggle(key="ex_own").set_value(True).run()
+    for label in ("Annual tCO₂e per engine", "Average profit per engine per year",
+                  "Carbon project prices", "Saved scenarios · scenario emissions"):
+        app.selectbox(key="ex_data").set_value(label).run()
+        assert not app.exception, label
+    by_label(app.button, "Open the Scenario Builder").click().run()
+    assert app.session_state["nav"] == "Scenario Builder"
+    assert isinstance(app.session_state["ex_values"]["quantities"], pd.DataFrame)
+    # The Scenario Builder and Testing tab still use the workbook values.
+    assert not app.exception
